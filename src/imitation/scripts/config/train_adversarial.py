@@ -121,7 +121,7 @@ def airl():
 MUJOCO_SHARED_LOCALS = dict(init_trainer_kwargs=dict(airl_entropy_weight=0.1,),)
 
 ANT_SHARED_LOCALS = dict(
-    total_timesteps=3e7,
+    total_timesteps=8e7,
     gen_batch_size=2048 * 8,
     disc_batch_size=2048 * 8,
     init_trainer_kwargs=dict(max_episode_steps=500,),  # To match `inverse_rl` settings.
@@ -142,6 +142,7 @@ def cartpole():
     env_name = "CartPole-v1"
     rollout_hint = "cartpole"
     init_trainer_kwargs = dict(scale=False,)
+    total_timesteps = 3e7
 
 
 @train_ex.named_config

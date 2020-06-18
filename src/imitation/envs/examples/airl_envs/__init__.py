@@ -22,7 +22,7 @@ def _point_maze_register():
 
 _register(
     "imitation/ObjPusher-v0",
-    entry_point=f"pusher_env:PusherEnv",
+    entry_point="pusher_env:PusherEnv",
     kwargs={"sparse_reward": False},
 )
 _register("imitation/TwoDMaze-v0", entry_point="twod_maze:TwoDMaze")

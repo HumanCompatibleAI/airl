@@ -225,7 +225,7 @@ def test_analyze_imitation(tmpdir: str, run_names: List[str]):
         with tempfile.TemporaryDirectory(prefix="junk") as junkdir:
             rollout_path = "tests/data/expert_models/cartpole_0/rollouts/final.pkl"
             run = train_ex.run(
-                named_configs=["fast", "cartpole"],
+                named_configs=["cartpole", "fast"],
                 config_updates=dict(
                     rollout_path=rollout_path, log_dir=junkdir, checkpoint_interval=-1,
                 ),
