@@ -66,7 +66,6 @@ def make_trainer(tmpdir, beta_schedule=dagger.LinearBetaSchedule(1)):
         env,
         tmpdir,
         beta_schedule,
-        optimizer_kwargs=dict(lr=1e-3),
     )
 
 
