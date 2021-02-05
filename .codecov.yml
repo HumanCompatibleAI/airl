@@ -7,11 +7,13 @@ coverage:
           - "src/imitation/"
           - "!src/imitation/envs/examples/"
           - "!src/imitation/scripts/"
+          - "!src/imitation/contrib/"
       auxiliary:
         target: 0%
         paths:
           - "src/imitation/envs/examples/"
           - "src/imitation/scripts/"
+          - "src/imitation/contrib/"
       tests:
         # Should not have dead code in our tests
         target: 100%

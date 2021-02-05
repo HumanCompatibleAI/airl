@@ -7,6 +7,7 @@ Subpackages
 .. toctree::
 
    imitation.algorithms
+   imitation.contrib
    imitation.data
    imitation.envs
    imitation.policies
