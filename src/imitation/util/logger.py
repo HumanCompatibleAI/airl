@@ -180,6 +180,11 @@ def record(key, val, exclude=None) -> None:
     sb_logger.record(key, val, exclude)
 
 
+def record_mean(key, val, exclude=None) -> None:
+    """Alias for `stable_baselines3.logger.record_mean`."""
+    sb_logger.record_mean(key, val, exclude)
+
+
 def dump(step=0) -> None:
     """Alias for `stable_baselines3.logger.dump`."""
     sb_logger.dump(step)

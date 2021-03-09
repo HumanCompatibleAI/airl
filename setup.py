@@ -26,7 +26,7 @@ DOCS_REQUIRE = [
     "sphinx-rtd-theme",
     "sphinxcontrib-napoleon",
 ]
-PARALLEL_REQUIRE = ["ray[debug,tune]~=0.8.5"]
+PARALLEL_REQUIRE = ["ray[debug,tune]>=0.8.7,<0.9.0"]
 
 
 def get_readme() -> str:
@@ -55,11 +55,15 @@ setup(
         "torch>=1.4.0",
         "tqdm",
         "scikit-learn>=0.21.2",
-        "stable-baselines3~=0.10.0",
+        # this has some fixes/improvements to vecenvs
+        ("stable-baselines3 @ git+https://github.com/HumanCompatibleAI"
+         "/stable-baselines3.git@7c95c9027dbbb93843873aac6dcdcab4c7c709a6"),
         "jax~=0.2.8",
         "jaxlib~=0.1.59",
         "sacred~=0.8.1",
         "tensorboard>=1.14",
+        # TODO(sam): switch to pip once kornia#635 is fixed.
+        "kornia @ git+https://github.com/qxcv/kornia.git@imitation",
     ],
     tests_require=TESTS_REQUIRE,
     extras_require={

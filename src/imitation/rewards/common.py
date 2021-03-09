@@ -62,7 +62,8 @@ def disc_rew_preprocess_inputs(
     next_state: np.ndarray,
     done: np.ndarray,
     device: th.device,
-    scale: bool = False,
+    *,
+    normalize_images: bool,
 ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, th.Tensor]:
     state_th = th.as_tensor(state, device=device)
     action_th = th.as_tensor(action, device=device)
@@ -72,10 +73,14 @@ def disc_rew_preprocess_inputs(
     del state, action, next_state, done  # unused
 
     # preprocess
-    state_th = preprocessing.preprocess_obs(state_th, observation_space, scale)
-    action_th = preprocessing.preprocess_obs(action_th, action_space, scale)
+    state_th = preprocessing.preprocess_obs(
+        state_th, observation_space, normalize_images=normalize_images
+    )
+    action_th = preprocessing.preprocess_obs(
+        action_th, action_space, normalize_images=normalize_images
+    )
     next_state_th = preprocessing.preprocess_obs(
-        next_state_th, observation_space, scale
+        next_state_th, observation_space, normalize_images=normalize_images
     )
     done_th = done_th.to(th.float32)
 
@@ -132,7 +137,7 @@ def compute_train_stats(
         _n_gen_or_1 = max(1, n_generated)
         generated_acc = _n_pred_gen / float(_n_gen_or_1)
 
-        label_dist = th.distributions.Bernoulli(disc_logits_gen_is_high)
+        label_dist = th.distributions.Bernoulli(th.sigmoid(disc_logits_gen_is_high))
         entropy = th.mean(label_dist.entropy())
 
     pairs = [

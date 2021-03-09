@@ -9,7 +9,7 @@ import torch as th
 import torch.utils.data as th_data
 import torch.utils.tensorboard as thboard
 import tqdm
-from stable_baselines3.common import on_policy_algorithm, preprocessing, vec_env
+from stable_baselines3.common import on_policy_algorithm, preprocessing, vec_env, callbacks as sb3_callbacks
 
 from imitation.data import buffer, types, wrappers
 from imitation.rewards import common as rew_common
@@ -46,12 +46,17 @@ class AdversarialTrainer:
         log_dir: str = "output/",
         normalize_obs: bool = True,
         normalize_reward: bool = True,
+        normalize_reward_std: float = 1.0,
+        clip_obs: float = float("inf"),
+        clip_reward: float = float("inf"),
         disc_opt_cls: Type[th.optim.Optimizer] = th.optim.Adam,
         disc_opt_kwargs: Optional[Mapping] = None,
         gen_replay_buffer_capacity: Optional[int] = None,
         init_tensorboard: bool = False,
         init_tensorboard_graph: bool = False,
         debug_use_ground_truth: bool = False,
+        disc_augmentation_fn: Callable[[th.Tensor], th.Tensor] = None,
+        gen_callbacks: Optional[Iterable[sb3_callbacks.BaseCallback]] = None,
     ):
         """Builds AdversarialTrainer.
 
@@ -84,6 +89,9 @@ class AdversarialTrainer:
             log_dir: Directory to store TensorBoard logs, plots, etc. in.
             normalize_obs: Whether to normalize observations with `VecNormalize`.
             normalize_reward: Whether to normalize rewards with `VecNormalize`.
+            normalize_reward_std: Target standard deviation of rewards.
+            clip_obs: Bound on l_infty magnitude of observation.
+            clip_reward: Bound on magnitude of reward.
             disc_opt_cls: The optimizer for discriminator training.
             disc_opt_kwargs: Parameters for discriminator training.
             gen_replay_buffer_capacity: The capacity of the
@@ -101,6 +109,10 @@ class AdversarialTrainer:
                 This disables the reward wrapping that would normally replace
                 the environment reward with the learned reward. This is useful for
                 sanity checking that the policy training is functional.
+            disc_augmentation_fn: Function to augment a batch of (on-device)
+                discriminator training inputs (default: identity).
+            gen_callbacks: SB3 callbacks to give to `PPO.learn()` during
+                generator training.
         """
 
         assert (
@@ -133,6 +145,9 @@ class AdversarialTrainer:
             self.expert_data_loader = expert_data
         self._endless_expert_iterator = util.endless_iter(self.expert_data_loader)
 
+        if disc_augmentation_fn is None:
+            disc_augmentation_fn = util.identity
+        self.disc_augmentation_fn = disc_augmentation_fn
         self.debug_use_ground_truth = debug_use_ground_truth
         self.venv = venv
         self.gen_algo = gen_algo
@@ -159,19 +174,31 @@ class AdversarialTrainer:
             self.venv_buffering,
             norm_reward=False,
             norm_obs=normalize_obs,
+            clip_obs=clip_obs,
+            clip_reward=None,
+            norm_reward_std=None,
         )
 
         if debug_use_ground_truth:
             # Would use an identity reward fn here, but RewardFns can't see rewards.
             self.venv_wrapped = self.venv_norm_obs
-            self.gen_callback = None
+            all_gen_callbacks = []
         else:
             self.venv_wrapped = reward_wrapper.RewardVecEnvWrapper(
                 self.venv_norm_obs, self.discrim.predict_reward_train
             )
-            self.gen_callback = self.venv_wrapped.make_log_callback()
+            all_gen_callbacks = [self.venv_wrapped.make_log_callback()]
+        if gen_callbacks:
+            all_gen_callbacks.extend(gen_callbacks)
+        self.gen_callback = sb3_callbacks.CallbackList(all_gen_callbacks)
+
         self.venv_train = vec_env.VecNormalize(
-            self.venv_wrapped, norm_obs=False, norm_reward=normalize_reward
+            self.venv_wrapped,
+            norm_obs=False,
+            norm_reward=normalize_reward,
+            norm_reward_std=normalize_reward_std,
+            clip_reward=clip_reward,
+            clip_obs=float("inf"),
         )
 
         self.gen_algo.set_env(self.venv_train)
@@ -194,6 +221,7 @@ class AdversarialTrainer:
         *,
         expert_samples: Optional[Mapping] = None,
         gen_samples: Optional[Mapping] = None,
+        dump_logs: bool = False,
     ) -> Dict[str, float]:
         """Perform a single discriminator update, optionally using provided samples.
 
@@ -210,6 +238,7 @@ class AdversarialTrainer:
                 form as `expert_samples`. If provided, must contain exactly
                 `self.expert_batch_size` samples. If not provided, then take
                 `len(expert_samples)` samples from the generator replay buffer.
+            dump_logs: Whether to dump discriminator training logs on every iteration.
 
         Returns:
            dict: Statistics for discriminator (e.g. loss, accuracy).
@@ -244,8 +273,9 @@ class AdversarialTrainer:
                 )
             logger.record("global_step", self._global_step)
             for k, v in train_stats.items():
-                logger.record(k, v)
-            logger.dump(self._disc_step)
+                logger.record_mean(k, v)
+            if dump_logs:
+                logger.dump(self._disc_step)
             if write_summaries:
                 self._summary_writer.add_histogram("disc_logits", disc_logits.detach())
 
@@ -289,6 +319,7 @@ class AdversarialTrainer:
         self,
         total_timesteps: int,
         callback: Optional[Callable[[int], None]] = None,
+        log_interval_timesteps: Optional[int] = None,
     ) -> None:
         """Alternates between training the generator and discriminator.
 
@@ -304,20 +335,30 @@ class AdversarialTrainer:
           callback: A function called at the end of every round which takes in a
               single argument, the round number. Round numbers are in
               `range(total_timesteps // self.gen_batch_size)`.
+          log_interval_timesteps: dump logs every `log_interval_timesteps`. If
+              None, will dump as frequently as possible.
         """
         n_rounds = total_timesteps // self.gen_batch_size
+        last_log_dump = None
         assert n_rounds >= 1, (
             "No updates (need at least "
             f"{self.gen_batch_size} timesteps, have only "
             f"total_timesteps={total_timesteps})!"
         )
-        for r in tqdm.tqdm(range(0, n_rounds), desc="round"):
-            self.train_gen(self.gen_batch_size)
+        for r in tqdm.trange(n_rounds, desc="round"):
+            self.train_gen(
+                self.gen_batch_size,
+                learn_kwargs=dict(dump_logs=log_interval_timesteps is None,
+                                  progress_max_timesteps=total_timesteps))
             for _ in range(self.n_disc_updates_per_round):
-                self.train_disc()
+                self.train_disc(dump_logs=log_interval_timesteps is None)
             if callback:
                 callback(r)
-            logger.dump(self._global_step)
+            num_timesteps = self.gen_algo.num_timesteps
+            if (last_log_dump is None or log_interval_timesteps is None or
+               num_timesteps > last_log_dump + log_interval_timesteps):
+                last_log_dump = num_timesteps
+                logger.dump(self._global_step)
 
     def _torchify_array(self, ndarray: np.ndarray, **kwargs) -> th.Tensor:
         return th.as_tensor(ndarray, device=self.discrim.device(), **kwargs)
@@ -325,12 +366,15 @@ class AdversarialTrainer:
     def _torchify_with_space(
         self, ndarray: np.ndarray, space: gym.Space, **kwargs
     ) -> th.Tensor:
-        tensor = th.as_tensor(ndarray, device=self.discrim.device(), **kwargs)
+        # always make it contiguous so that we can feed it to augmentation
+        # module, RNNs, etc.
+        tensor = th.as_tensor(
+            ndarray, device=self.discrim.device(), **kwargs
+        ).contiguous()
         preprocessed = preprocessing.preprocess_obs(
             tensor,
             space,
-            # TODO(sam): can I remove "scale" kwarg in DiscrimNet etc.?
-            normalize_images=self.discrim.scale,
+            normalize_images=self.discrim.normalize_images,
         )
         return preprocessed
 
@@ -402,6 +446,7 @@ class AdversarialTrainer:
         next_obs = self.venv_norm_obs.normalize_obs(next_obs)
 
         # Calculate generator-policy log probabilities.
+        # FIXME(sam): skip this if we don't actually need log probabilities
         with th.no_grad():
             obs_th = th.as_tensor(obs, device=self.gen_algo.device)
             acts_th = th.as_tensor(acts, device=self.gen_algo.device)
@@ -413,12 +458,19 @@ class AdversarialTrainer:
         assert len(log_act_prob) == n_samples
         log_act_prob = log_act_prob.reshape((n_samples,))
 
-        batch_dict = {
-            "state": self._torchify_with_space(obs, self.discrim.observation_space),
-            "action": self._torchify_with_space(acts, self.discrim.action_space),
-            "next_state": self._torchify_with_space(
+        # torchify states first so that we can apply augmentations
+        with th.no_grad():
+            torch_state = self._torchify_with_space(obs, self.discrim.observation_space)
+            torch_next_state = self._torchify_with_space(
                 next_obs, self.discrim.observation_space
-            ),
+            )
+        torch_state = self.disc_augmentation_fn(torch_state)
+        torch_next_state = self.disc_augmentation_fn(torch_next_state)
+
+        batch_dict = {
+            "state": torch_state,
+            "next_state": torch_next_state,
+            "action": self._torchify_with_space(acts, self.discrim.action_space),
             "done": self._torchify_array(dones),
             "labels_gen_is_one": self._torchify_array(labels_gen_is_one),
             "log_policy_act_prob": self._torchify_array(log_act_prob),

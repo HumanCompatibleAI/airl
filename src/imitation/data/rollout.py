@@ -82,6 +82,9 @@ class TrajectoryAccumulator:
             key: np.stack(arr_list, axis=0)
             for key, arr_list in out_dict_unstacked.items()
         }
+        if 'rews' in out_dict_stacked:
+            # make sure rewards are floating point, as expected by TrajectoryWithRew
+            out_dict_stacked['rews'] = out_dict_stacked['rews'].astype('float64')
         traj = types.TrajectoryWithRew(**out_dict_stacked)
         assert traj.rews.shape[0] == traj.acts.shape[0] == traj.obs.shape[0] - 1
         return traj
@@ -275,6 +278,16 @@ def generate_trajectories(
         # by just making it never done.
         dones &= active
 
+        if np.issubdtype(rews.dtype, np.integer):
+            # some envs have integer rewards (e.g. because the env author
+            # forgot to add a "." at the end of a numeric literal); we
+            # auto-convert those to float32
+            rews = rews.astype("float32")
+            if not np.all(np.isfinite(rews)):
+                raise ValueError(
+                    "integer-valued rewards from environment are out of "
+                    "float32 range; cannot auto-convert to float"
+                )
         new_trajs = trajectories_accum.add_steps_and_auto_finish(
             acts, obs, rews, dones, infos
         )

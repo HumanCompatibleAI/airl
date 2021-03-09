@@ -126,7 +126,7 @@ def acrobot():
 def cartpole():
     env_name = "CartPole-v1"
     rollout_hint = "cartpole"
-    discrim_net_kwargs = {"gail": {"scale": False}}
+    discrim_net_kwargs = {}
 
 
 @train_ex.named_config

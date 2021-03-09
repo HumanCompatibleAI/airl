@@ -20,7 +20,7 @@ parallel_ex = sacred.Experiment("parallel")
 @parallel_ex.config
 def config():
     sacred_ex_name = "expert_demos"  # The experiment to parallelize
-    init_kwargs = {}  # Keyword arguments to pass to ray.init()
+    init_kwargs = {"include_dashboard": False}  # Kwargs to pass to ray.init()
     _uuid = make_unique_timestamp()
     run_name = f"DEFAULT_{_uuid}"  # CLI --name option. For analysis grouping.
     resources_per_trial = {}  # Argument to `tune.run`

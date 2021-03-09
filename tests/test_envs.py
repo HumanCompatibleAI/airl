@@ -2,6 +2,9 @@
 
 import gym
 import pytest
+
+# TODO(sam): seals_test seems to require MuJoCo. It would be helpful to skip
+# these tests if it is not available, like we do in test_scripts.py.
 from seals.testing import envs as seals_test
 
 # Unused imports is for side-effect of registering environments

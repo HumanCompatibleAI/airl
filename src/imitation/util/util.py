@@ -17,7 +17,9 @@ from typing import (
 import gym
 import numpy as np
 import stable_baselines3
+import torch as th
 from gym.wrappers import TimeLimit
+from scipy import stats
 from stable_baselines3.common import monitor
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.policies import ActorCriticPolicy, BasePolicy
@@ -39,8 +41,10 @@ def make_vec_env(
     n_envs: int = 8,
     seed: int = 0,
     parallel: bool = False,
+    parallel_workers: Optional[int] = None,
     log_dir: Optional[str] = None,
     max_episode_steps: Optional[int] = None,
+    wrapper_class: Optional[Callable] = None,
     post_wrappers: Optional[Sequence[Callable[[gym.Env, int], gym.Env]]] = None,
 ) -> VecEnv:
     """Returns a VecEnv initialized with `n_envs` Envs.
@@ -50,6 +54,8 @@ def make_vec_env(
         n_envs: The number of duplicate environments.
         seed: The environment seed.
         parallel: If True, uses SubprocVecEnv; otherwise, DummyVecEnv.
+        parallel_workers: if `parallel` is true, this determines the number of
+            worker processes (defaults to `n_envs` if None).
         log_dir: If specified, saves Monitor output to this directory.
         max_episode_steps: If specified, wraps each env in a TimeLimit wrapper
             with this episode length. If not specified and `max_episode_steps`
@@ -57,6 +63,8 @@ def make_vec_env(
             `max_episode_steps` for every TimeLimit wrapper (this automatic
             wrapper is the default behavior when calling `gym.make`). Otherwise
             the environments are passed into the VecEnv unwrapped.
+        wrapper_class: A wrapper class to apply to all sub-environments. This
+            is applied after the Monitor, but before the RolloutInfoWrapper.
         post_wrappers: If specified, iteratively wraps each environment with each
             of the wrappers specified in the sequence. The argument should be a Callable
             accepting two arguments, the Env to be wrapped and the environment index,
@@ -96,6 +104,9 @@ def make_vec_env(
             log_path = os.path.join(log_subdir, f"mon{i:03d}")
 
         env = monitor.Monitor(env, log_path)
+        if wrapper_class is not None:
+            # we apply this after Monitor, just like cmd_util.make_vec_env in SB3
+            env = wrapper_class(env)
         env = wrappers.RolloutInfoWrapper(env)
 
         if post_wrappers:
@@ -109,7 +120,8 @@ def make_vec_env(
     env_fns = [functools.partial(make_env, i, s) for i, s in enumerate(env_seeds)]
     if parallel:
         # See GH hill-a/stable-baselines issue #217
-        return SubprocVecEnv(env_fns, start_method="forkserver")
+        return SubprocVecEnv(env_fns, start_method="forkserver",
+                             n_workers=parallel_workers)
     else:
         return DummyVecEnv(env_fns)
 
@@ -160,6 +172,11 @@ def docstring_parameter(*args, **kwargs):
 T = TypeVar("T")
 
 
+def identity(x: T) -> T:
+    """Identity function."""
+    return x
+
+
 def endless_iter(iterable: Iterable[T]) -> Iterator[T]:
     """Generator that endlessly yields elements from iterable.
 
@@ -183,3 +200,26 @@ def endless_iter(iterable: Iterable[T]) -> Iterator[T]:
         raise err
 
     return itertools.chain.from_iterable(itertools.repeat(iterable))
+
+
+def optim_lr_gmean(optimizer: th.optim.Optimizer) -> float:
+    """Compute geometric mean of learning rates across all the optimizer's
+    parameter groups.
+
+    Args:
+        optimizer (torch.optim.Optimizer): a Torch optimizer.
+
+    Returns:
+        float: geometric mean of the learning rates across all parameter
+            groups."""
+    lrs = []
+    for param_group in optimizer.param_groups:
+        lrs.append(param_group['lr'])
+    if len(lrs) == 0:
+        raise ValueError(f"No parameter groups for optimizer {optimizer}")
+    if len(set(lrs)) == 1:
+        # special-case logic: don't do geometric mean (with associated
+        # imprecision) if we can just return one value instead
+        return lrs[0]
+    # otherwise, do geometric mean
+    return stats.gmean(lrs)

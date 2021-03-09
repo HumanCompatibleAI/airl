@@ -23,7 +23,7 @@ class RewardNet(nn.Module, abc.ABC):
       use_next_state: should `base_reward_net` pay attention to next state?
       use_action: should `base_reward_net` pay attention to action?
       use_done: should `base_reward_net` pay attention to done flags?
-      scale: should inputs be scaled to lie in [0,1] using space bounds?
+      normalize_images: should uint8 image inputs be scaled to lie in [0,1]?
     """
 
     def __init__(
@@ -31,7 +31,7 @@ class RewardNet(nn.Module, abc.ABC):
         observation_space: gym.Space,
         action_space: gym.Space,
         *,
-        scale: bool = False,
+        normalize_images: bool = True,
         use_state: bool = True,
         use_action: bool = True,
         use_next_state: bool = False,
@@ -42,7 +42,7 @@ class RewardNet(nn.Module, abc.ABC):
         Args:
             observation_space: The observation space.
             action_space: The action space.
-            scale: Whether to scale the input.
+            normalize_images: Whether to scale image inputs.
             use_state: Whether state is included in inputs to network.
             use_action: Whether action is included in inputs to network.
             use_next_state: Whether next state is included in inputs to network.
@@ -52,7 +52,7 @@ class RewardNet(nn.Module, abc.ABC):
 
         self.observation_space = observation_space
         self.action_space = action_space
-        self.scale = scale
+        self.normalize_images = normalize_images
         self.use_state = use_state
         self.use_action = use_action
         self.use_next_state = use_next_state
@@ -169,7 +169,7 @@ class RewardNet(nn.Module, abc.ABC):
             next_state=next_state,
             done=done,
             device=self.device(),
-            scale=self.scale,
+            normalize_images=self.normalize_images,
         )
 
         with th.no_grad():
@@ -323,13 +323,13 @@ class BasicRewardMLP(nn.Module):
     def forward(self, state, action, next_state, done):
         inputs = []
         if self.use_state:
-            inputs.append(th.flatten(state, 1))
+            inputs.append(th.flatten(state, 1).float())
         if self.use_action:
-            inputs.append(th.flatten(action, 1))
+            inputs.append(th.flatten(action, 1).float())
         if self.use_next_state:
-            inputs.append(th.flatten(next_state, 1))
+            inputs.append(th.flatten(next_state, 1).float())
         if self.use_done:
-            inputs.append(th.reshape(done, [-1, 1]))
+            inputs.append(th.reshape(done, [-1, 1]).float())
 
         inputs_concat = th.cat(inputs, dim=1)
 
