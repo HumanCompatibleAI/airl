@@ -151,9 +151,7 @@ class BC:
         self,
         observation_space: gym.Space,
         action_space: gym.Space,
-        *,
-        policy_class: Type[policies.BasePolicy] = base.FeedForward32Policy,
-        policy_kwargs: Optional[Mapping[str, Any]] = None,
+        policy: Type[policies.BasePolicy],
         expert_data: Union[Iterable[Mapping], types.TransitionsMinimal, None] = None,
         optimizer_cls: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
@@ -170,8 +168,7 @@ class BC:
         Args:
             observation_space: the observation space of the environment.
             action_space: the action space of the environment.
-            policy_class: used to instantiate imitation policy.
-            policy_kwargs: keyword arguments passed to policy's constructor.
+            policy: the policy to be trained.
             expert_data: If not None, then immediately call
                   `self.set_expert_data_loader(expert_data)` during initialization.
             optimizer_cls: optimiser to use for supervised training.
@@ -187,19 +184,11 @@ class BC:
 
         self.action_space = action_space
         self.observation_space = observation_space
-        self.policy_class = policy_class
         self.device = device = utils.get_device(device)
-        self.policy_kwargs = dict(
-            observation_space=self.observation_space,
-            action_space=self.action_space,
-            lr_schedule=ConstantLRSchedule(),
-        )
-        self.policy_kwargs.update(policy_kwargs or {})
         self.device = utils.get_device(device)
 
-        self.policy = self.policy_class(**self.policy_kwargs).to(
-            self.device
-        )  # pytype: disable=not-instantiable
+        self.policy = policy.policy.to(self.device)
+# pytype: disable=not-instantiable
         optimizer_kwargs = optimizer_kwargs or {}
         self.optimizer = optimizer_cls(self.policy.parameters(), **optimizer_kwargs)
 

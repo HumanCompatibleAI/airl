@@ -224,8 +224,8 @@ def generate_trajectories(
     """Generate trajectory dictionaries from a policy and an environment.
 
     Args:
-      policy (BasePolicy or BaseAlgorithm): A stable_baselines3 policy or algorithm
-          trained on the gym environment.
+      policy (Callable,BasePolicy or BaseAlgorithm): A function mapping observation to action, a stable_baselines3 policy 
+      or an algorithm trained on the gym environment.
       venv: The vectorized environments to interact with.
       sample_until: A function determining the termination condition.
           It takes a sequence of trajectories, and returns a bool.
@@ -240,7 +240,6 @@ def generate_trajectories(
       may be collected to avoid biasing process towards short episodes; the user
       should truncate if required.
     """
-    get_action = policy.predict
     if isinstance(policy, BaseAlgorithm):
         policy.set_env(venv)
 
@@ -266,7 +265,10 @@ def generate_trajectories(
     # To start with, all environments are active.
     active = np.ones(venv.num_envs, dtype=np.bool)
     while np.any(active):
-        acts, _ = get_action(obs, deterministic=deterministic_policy)
+        if isinstance(policy, Callable):
+            acts = policy(obs)
+        else:
+            acts, _ = policy.predict(obs, deterministic=deterministic_policy)
         obs, rews, dones, infos = venv.step(acts)
 
         # If an environment is inactive, i.e. the episode completed for that
