@@ -264,7 +264,7 @@ def generate_trajectories(
     # are complete.
     #
     # To start with, all environments are active.
-    active = np.ones(venv.num_envs, dtype=np.bool)
+    active = np.ones(venv.num_envs, dtype=bool)
     while np.any(active):
         acts, _ = get_action(obs, deterministic=deterministic_policy)
         obs, rews, dones, infos = venv.step(acts)
@@ -382,7 +382,7 @@ def flatten_trajectories(
         parts["obs"].append(obs[:-1])
         parts["next_obs"].append(obs[1:])
 
-        dones = np.zeros(len(traj.acts), dtype=np.bool)
+        dones = np.zeros(len(traj.acts), dtype=bool)
         dones[-1] = True
         parts["dones"].append(dones)
 

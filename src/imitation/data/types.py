@@ -235,7 +235,7 @@ class Transitions(TransitionsMinimal):
                 "dones must be 1D array, one entry for each timestep: "
                 f"{self.dones.shape} != ({len(self.acts)},)"
             )
-        if self.dones.dtype != np.bool:
+        if self.dones.dtype != bool:
             raise ValueError(f"dones must be boolean, not {self.dones.dtype}")
 
 

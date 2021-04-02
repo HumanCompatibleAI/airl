@@ -69,7 +69,7 @@ def test_buffer(capacity, chunk_len, sample_shape):
 @pytest.mark.parametrize("chunk_len", [1, 4, 9])
 @pytest.mark.parametrize("obs_shape", [(), (1, 2)])
 @pytest.mark.parametrize("act_shape", [(), (5, 4, 4)])
-@pytest.mark.parametrize("dtype", [np.int, np.float32])
+@pytest.mark.parametrize("dtype", [int, np.float32])
 def test_replay_buffer(capacity, chunk_len, obs_shape, act_shape, dtype):
     """Builds a ReplayBuffer with the provided `capacity` and inserts.
 
@@ -96,7 +96,7 @@ def test_replay_buffer(capacity, chunk_len, obs_shape, act_shape, dtype):
         assert buf._buffer._idx == i % capacity
 
         dones = np.arange(i, i + chunk_len, dtype=np.int32) % 2
-        dones = dones.astype(np.bool)
+        dones = dones.astype(bool)
         infos = _fill_chunk(9 * capacity + i, chunk_len, (), dtype=dtype)
         infos = np.array([{"a": val} for val in infos])
         batch = types.Transitions(
@@ -122,7 +122,7 @@ def test_replay_buffer(capacity, chunk_len, obs_shape, act_shape, dtype):
         assert sample.acts.dtype == dtype
         assert sample.next_obs.dtype == dtype
         assert info_vals.dtype == dtype
-        assert sample.dones.dtype == np.bool
+        assert sample.dones.dtype == bool
         assert sample.infos.dtype == np.object
 
         # Are samples in range?

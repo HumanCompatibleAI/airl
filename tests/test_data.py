@@ -68,7 +68,7 @@ def transitions(
 ) -> types.Transitions:
     """Fixture to generate transitions of length `length` iid sampled from spaces."""
     next_obs = np.array([obs_space.sample() for _ in range(length)])
-    dones = np.zeros(length, dtype=np.bool)
+    dones = np.zeros(length, dtype=bool)
     return types.Transitions(
         **dataclasses.asdict(transitions_min), next_obs=next_obs, dones=dones
     )
@@ -191,7 +191,7 @@ class TestData:
 
         with pytest.raises(ValueError, match=r"rewards dtype.* not a float"):
             dataclasses.replace(
-                trajectory_rew, rews=np.zeros(len(trajectory_rew), dtype=np.int)
+                trajectory_rew, rews=np.zeros(len(trajectory_rew), dtype=int)
             )
 
     def test_valid_transitions(
@@ -254,7 +254,7 @@ class TestData:
                 ValueError, match=r"obs and next_obs must have the same dtype:.*"
             ):
                 dataclasses.replace(
-                    trans, next_obs=np.zeros_like(trans.next_obs, dtype=np.bool)
+                    trans, next_obs=np.zeros_like(trans.next_obs, dtype=bool)
                 ),
 
             _check_1d_shape(
@@ -264,7 +264,7 @@ class TestData:
             )
 
             with pytest.raises(ValueError, match=r"dones must be boolean"):
-                dataclasses.replace(trans, dones=np.zeros(len(trans), dtype=np.int))
+                dataclasses.replace(trans, dones=np.zeros(len(trans), dtype=int))
 
         _check_1d_shape(
             fn=lambda bogus_rews: dataclasses.replace(trans, rews=bogus_rews),
@@ -274,7 +274,7 @@ class TestData:
 
         with pytest.raises(ValueError, match=r"rewards dtype.* not a float"):
             dataclasses.replace(
-                transitions_rew, rews=np.zeros(len(transitions_rew), dtype=np.int)
+                transitions_rew, rews=np.zeros(len(transitions_rew), dtype=int)
             )
 
 
