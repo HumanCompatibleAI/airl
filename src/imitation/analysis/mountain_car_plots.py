@@ -210,9 +210,9 @@ def plot_reward_vs_time(
         X = []
         Y = []
         for traj in trajs_list:
-            T = len(traj.rews)
+            T = len(traj.acts)
             X.extend(range(T))
-            dones = np.zeros(T, dtype=np.bool)
+            dones = np.zeros(T, dtype=bool)
             dones[-1] = True
             rews = reward_fn(traj.obs[:-1], traj.acts, traj.obs[1:], dones)
             Y.extend(rews)

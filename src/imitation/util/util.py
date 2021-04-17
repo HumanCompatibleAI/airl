@@ -23,8 +23,6 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.policies import ActorCriticPolicy, BasePolicy
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 
-from imitation.data import wrappers
-
 
 def make_unique_timestamp() -> str:
     """Timestamp, with random uuid added to avoid collisions."""
@@ -96,7 +94,6 @@ def make_vec_env(
             log_path = os.path.join(log_subdir, f"mon{i:03d}")
 
         env = monitor.Monitor(env, log_path)
-        env = wrappers.RolloutInfoWrapper(env)
 
         if post_wrappers:
             for wrapper in post_wrappers:
